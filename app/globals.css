@@ -1,0 +1,96 @@
+@import "tailwindcss";
+@theme inline {
+  --font-sans:
+    "Inter", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+}
+:root {
+  --background: #f7f8f5;
+  --foreground: #182923;
+  --card: #ffffff;
+  --primary: #23664b;
+  --primary-foreground: #ffffff;
+  --muted: #ecf0ea;
+  --muted-foreground: #65746d;
+  --border: #dfe6dd;
+  --accent: #e7f1e2;
+  --accent-foreground: #26573e;
+  color-scheme: light;
+}
+.jobs-portal[data-theme="dark"] {
+  --background: #101917;
+  --foreground: #eef4ec;
+  --card: #182420;
+  --primary: #b9e48c;
+  --primary-foreground: #172b20;
+  --muted: #21302a;
+  --muted-foreground: #a4b5aa;
+  --border: #304139;
+  --accent: #293d2b;
+  --accent-foreground: #cbe9b4;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  .jobs-portal[data-theme="system"] {
+    --background: #101917;
+    --foreground: #eef4ec;
+    --card: #182420;
+    --primary: #b9e48c;
+    --primary-foreground: #172b20;
+    --muted: #21302a;
+    --muted-foreground: #a4b5aa;
+    --border: #304139;
+    --accent: #293d2b;
+    --accent-foreground: #cbe9b4;
+    color-scheme: dark;
+  }
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+.jobs-portal :is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+.jobs-portal :is(input, select, textarea) {
+  accent-color: var(--primary);
+}
+.jobs-portal input[type="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.jobs-portal :is(button, summary) {
+  cursor: pointer;
+}
+.jobs-portal button:disabled {
+  cursor: wait;
+}
+.jobs-portal {
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .jobs-portal *,
+  .jobs-portal *::before,
+  .jobs-portal *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
