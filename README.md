@@ -63,6 +63,16 @@ Onboarding verifies the candidate's hired application and invitation, then hands
 
 Restriction review, offer approval, interview feedback and recruiter-only details intentionally remain in the employer app. The portal follows the current implemented module rather than adding employer controls to a candidate session.
 
+## Company landing pages
+
+Each enabled public company has a landing page at `https://jobs.kumaworks.id/[company-code]`, with a header banner, company logo and description, website link, and cards for its public vacancies that are accepting applications. Companies with no open jobs still have a page with an empty state.
+
+Customize the code in **KumaWorks → People → Recruitment → Settings → Careers page address**. This uses the existing unique recruitment settings slug; no database migration is needed. For example, save `ptkago` to use `/ptkago` or share `/PTKAGO`. Codes are stored in lowercase; uppercase links resolve to the same company and use the lowercase canonical URL. The existing logo, company display name, description, and website supply the page branding. The banner uses the portal's built-in design.
+
+Old `/jobs/company/[code]` links redirect to the short address and preserve pagination. Application routes such as `/jobs` and `/api` take priority; companies with those reserved codes retain their legacy company address and should choose another code for a short URL. Changing a code changes the public address; previous codes are not retained as aliases.
+
+In preview mode, open `/RUANG-KARYA` or `/loka-digital` to review the company landing page with sample data. Real companies require recruitment and public intake to be enabled in the employer app.
+
 ## Deploy to Vercel
 
 1. Put this folder in its own repository and import it as a **separate Vercel project**, framework Next.js, root directory `.`. Use `npm ci` and `npm run build`.

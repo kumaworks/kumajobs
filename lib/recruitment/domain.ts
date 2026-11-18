@@ -178,6 +178,7 @@ export type PublicJob = {
   businessId: string;
   company: string;
   companySlug: string;
+  companyLogoUrl?: string | null;
   title: string;
   description: string;
   responsibilities: string;
@@ -327,7 +328,7 @@ export function validateApplication(
 }
 export function publicJob(
   row: Job,
-  company: { name: string; slug: string },
+  company: { name: string; slug: string; logoUrl?: string | null },
   accepting: boolean,
 ): PublicJob {
   const j = row.published ?? row.input;
@@ -337,6 +338,7 @@ export function publicJob(
     businessId: row.business_id,
     company: company.name,
     companySlug: company.slug,
+    companyLogoUrl: company.logoUrl ?? null,
     title: j.title,
     description: j.description,
     responsibilities: j.responsibilities,

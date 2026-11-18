@@ -1,4 +1,5 @@
 import { isPreview } from "@/lib/recruitment/preview";
+import { companyHref } from "@/lib/recruitment/company-url";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -126,9 +127,9 @@ export default async function JobPage({
       <section className="rounded-[2rem] border bg-card p-6 sm:p-9">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex items-center gap-4">
-            <CompanyMark name={job.company} />
+            <CompanyMark name={job.company} logoUrl={job.companyLogoUrl} />
             <Link
-              href={`/jobs/company/${job.companySlug}`}
+              href={companyHref(job.companySlug)}
               className="inline-flex items-center gap-2 text-sm font-medium text-primary"
             >
               {job.company}

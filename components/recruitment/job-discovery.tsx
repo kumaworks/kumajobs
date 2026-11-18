@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { CompanyMark } from "./company-mark";
+export { CompanyMark } from "./company-mark";
 import {
   ArrowDown,
   ArrowRight,
@@ -37,27 +39,6 @@ const periods: Record<string, string> = {
 export function salaryLabel(salary: NonNullable<PublicJob["salary"]>) {
   return `${salary.currency} ${salary.min.toLocaleString("id-ID")}–${salary.max.toLocaleString("id-ID")} / ${periods[salary.period] ?? salary.period}`;
 }
-export function CompanyMark({
-  name,
-  large = false,
-}: {
-  name: string;
-  large?: boolean;
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center rounded-2xl border border-primary/10 bg-accent font-semibold uppercase tracking-tight text-accent-foreground ${large ? "size-20 text-2xl" : "size-12 text-lg"}`}
-    >
-      {name
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((n) => n[0])
-        .join("") || "K"}
-    </span>
-  );
-}
 export function JobCard({ job }: { job: PublicJob }) {
   return (
     <Link
@@ -65,7 +46,7 @@ export function JobCard({ job }: { job: PublicJob }) {
       className="group flex h-full flex-col rounded-3xl border bg-card p-6 transition duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 sm:p-7"
     >
       <div className="flex items-start justify-between gap-4">
-        <CompanyMark name={job.company} />
+        <CompanyMark name={job.company} logoUrl={job.companyLogoUrl} />
         <ArrowUpRight className="size-5 text-muted-foreground transition group-hover:text-primary" />
       </div>
       <p className="mt-5 text-sm font-medium text-muted-foreground">

@@ -8,6 +8,7 @@ import {
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { publicJob, type Job, type PublicJob } from "./domain";
+import { normalizeCompanyCode } from "./company-url";
 
 export function recruitmentDb() {
   if (isPreview())
@@ -68,6 +69,32 @@ export async function rateLimit(key: string, limit = 20, seconds = 3600) {
   if (error || data !== true)
     throw new Error("Terlalu banyak permintaan. Coba lagi nanti.");
 }
+async function companyLogoUrls(businessIds: string[]) {
+  const urls = new Map<string, string>();
+  if (!businessIds.length) return urls;
+  const db = recruitmentDb();
+  const { data, error } = await db
+    .from("company_logos")
+    .select("business_id,storage_path")
+    .in("business_id", [...new Set(businessIds)])
+    .order("is_main", { ascending: false })
+    .order("created_at", { ascending: true })
+    .order("id");
+  if (error) {
+    console.error("Unable to load company logos:", error.message);
+    return urls;
+  }
+  for (const logo of data ?? []) {
+    if (!urls.has(logo.business_id) && logo.storage_path?.trim()) {
+      const { data } = db.storage
+        .from("company-logos")
+        .getPublicUrl(logo.storage_path);
+      urls.set(logo.business_id, data.publicUrl);
+    }
+  }
+  return urls;
+}
+
 export async function getPublicJobs(
   filter: {
     slug?: string;
@@ -123,10 +150,15 @@ export async function getPublicJobs(
   const page = Math.max(0, Math.floor(filter.page ?? 0));
   const { data, error } = await query.range(page * 50, page * 50 + 49);
   if (error) throw new Error(error.message);
+  const logos = await companyLogoUrls((data ?? []).map((row) => row.business_id));
   return (data ?? []).map((row) =>
     publicJob(
       { ...row, created_at: row.published_at } as Job,
-      { name: row.company_name, slug: row.company_slug },
+      {
+        name: row.company_name,
+        slug: row.company_slug,
+        logoUrl: logos.get(row.business_id),
+      },
       row.accepting,
     ),
   );
@@ -278,11 +310,15 @@ export async function verificationAvailability() {
   return Boolean(data?.length);
 }
 export async function publicCompany(slug: string) {
+  const code = normalizeCompanyCode(slug);
+  if (!code) return null;
   if (isPreview()) {
-    const job = previewJobs.find((j) => j.companySlug === slug);
+    const job = previewJobs.find((j) => j.companySlug === code);
     return job
       ? {
           company_name: job.company,
+          slug: code,
+          logoUrl: job.companyLogoUrl ?? null,
           description:
             "Tempat untuk ide yang berani, kolaborasi yang terbuka, dan pekerjaan yang berdampak. Temukan peran Anda bersama kami.",
           website: "",
@@ -291,11 +327,19 @@ export async function publicCompany(slug: string) {
   }
   const { data, error } = await recruitmentDb()
     .from("recruitment_settings")
-    .select("company_name,description,website")
-    .eq("slug", slug)
+    .select("business_id,slug,company_name,description,website")
+    .eq("slug", code)
     .eq("enabled", true)
     .eq("public_enabled", true)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return data;
+  if (!data) return null;
+  const logos = await companyLogoUrls([data.business_id]);
+  return {
+    company_name: data.company_name,
+    slug: data.slug as string,
+    description: data.description,
+    website: data.website,
+    logoUrl: logos.get(data.business_id) ?? null,
+  };
 }
