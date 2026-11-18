@@ -59,6 +59,9 @@ export async function requestCandidateLogin(
     );
     const base = process.env.NEXT_PUBLIC_JOBS_URL ?? "http://localhost:3001";
     const client = await createClient();
+    // Supabase uses the Magic Link template for existing-account email OTP.
+    // The hosted template renders .Token for these allowlisted jobs callbacks;
+    // switching to signup/resend would not sign existing candidates in.
     const { error } = await client.auth.signInWithOtp({
       email,
       options: {
