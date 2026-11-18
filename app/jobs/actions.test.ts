@@ -1,7 +1,11 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import {
   candidateAction,
   prepareCandidateUpload,
   requestCandidateLogin,
+  verifyCandidateLogin,
 } from "./actions";
 import { candidateSession, command, rateLimit } from "@/lib/recruitment/server";
 import { isPreview } from "@/lib/recruitment/preview";
@@ -69,6 +73,7 @@ test("preview blocks authentication, uploads and mutations before any service ac
   (isPreview as jest.Mock).mockReturnValue(true);
   const results = await Promise.all([
     requestCandidateLogin("test@example.invalid", "/jobs/account"),
+    verifyCandidateLogin("test@example.invalid", "123456", "/jobs/account"),
     prepareCandidateUpload({}),
     candidateAction("profile", null, null, {
       name: "Rina",
@@ -79,4 +84,147 @@ test("preview blocks authentication, uploads and mutations before any service ac
   expect(candidateSession).not.toHaveBeenCalled();
   expect(command).not.toHaveBeenCalled();
   expect(rateLimit).not.toHaveBeenCalled();
+  expect(createClient).not.toHaveBeenCalled();
+});
+
+const signInWithOtp = jest.fn();
+const verifyOtp = jest.fn();
+describe("candidate email OTP", () => {
+  beforeEach(() => {
+    (headers as jest.Mock).mockResolvedValue({ get: () => "192.0.2.1" });
+    (createClient as jest.Mock).mockResolvedValue({
+      auth: { signInWithOtp, verifyOtp },
+    });
+    signInWithOtp.mockResolvedValue({ error: null });
+    verifyOtp.mockResolvedValue({
+      data: { session: { user: { id: "candidate" } } },
+      error: null,
+    });
+    (redirect as unknown as jest.Mock).mockImplementation((path) => {
+      throw new Error(`REDIRECT:${path}`);
+    });
+  });
+  test("requests a code for normalized email and keeps new account creation", async () => {
+    const result = await requestCandidateLogin(
+      " RINA@EXAMPLE.INVALID ",
+      "/jobs/supervisor",
+    );
+    expect(result.data).toBeDefined();
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: "rina@example.invalid",
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: expect.stringContaining(
+          "/jobs/auth/callback?next=%2Fjobs%2Fsupervisor",
+        ),
+      },
+    });
+    expect(rateLimit).toHaveBeenCalledTimes(2);
+  });
+  test("delivery failures do not claim a code was sent or expose account details", async () => {
+    signInWithOtp.mockResolvedValue({
+      error: { status: 400, message: "account is banned" },
+    });
+    const result = await requestCandidateLogin(
+      "rina@example.invalid",
+      "/jobs/account",
+    );
+    expect(result.data).toBeUndefined();
+    expect(result.error).toMatch(/Tidak dapat mengirim kode/);
+    expect(result.error).not.toMatch(/banned/);
+  });
+  test("provider throttling asks the candidate to wait", async () => {
+    signInWithOtp.mockResolvedValue({ error: { status: 429 } });
+    expect(
+      (await requestCandidateLogin("rina@example.invalid", "/jobs/account"))
+        .error,
+    ).toMatch(/Tunggu/);
+  });
+  test.each(["12345", "1234567", "abcdef", "12 345", ""])(
+    "rejects malformed code %s before service access",
+    async (code) => {
+      expect(
+        (
+          await verifyCandidateLogin(
+            "rina@example.invalid",
+            code,
+            "/jobs/account",
+          )
+        ).error,
+      ).toMatch(/6 digit/);
+      expect(verifyOtp).not.toHaveBeenCalled();
+      expect(rateLimit).not.toHaveBeenCalled();
+    },
+  );
+  test("invalid email never reaches authentication", async () => {
+    expect(
+      (await requestCandidateLogin("invalid", "/jobs/account")).error,
+    ).toMatch(/email/);
+    expect(
+      (await verifyCandidateLogin("invalid", "123456", "/jobs/account")).error,
+    ).toMatch(/email/);
+    expect(createClient).not.toHaveBeenCalled();
+  });
+  test.each([
+    "/jobs/supervisor?apply=1",
+    "https://evil.example",
+    "//evil.example",
+  ])(
+    "verifies and redirects only to a safe candidate destination: %s",
+    async (next) => {
+      const destination = next.startsWith("/jobs/") ? next : "/jobs/account";
+      await expect(
+        verifyCandidateLogin(" RINA@EXAMPLE.INVALID ", " 012345 ", next),
+      ).rejects.toThrow(`REDIRECT:${destination}`);
+      expect(verifyOtp).toHaveBeenCalledWith({
+        email: "rina@example.invalid",
+        token: "012345",
+        type: "email",
+      });
+      expect(rateLimit).toHaveBeenCalledWith(
+        expect.stringMatching(/^auth-verify-email:[a-f0-9]{64}$/),
+        5,
+        300,
+      );
+      expect(rateLimit).toHaveBeenCalledWith(
+        expect.stringMatching(/^auth-verify-ip:/),
+        30,
+        300,
+      );
+    },
+  );
+  test.each([
+    { data: { session: null }, error: { message: "expired" } },
+    { data: { session: null }, error: null },
+  ])(
+    "invalid, expired or sessionless verification cannot redirect",
+    async (response) => {
+      verifyOtp.mockResolvedValue(response);
+      expect(
+        (
+          await verifyCandidateLogin(
+            "rina@example.invalid",
+            "123456",
+            "/jobs/account",
+          )
+        ).error,
+      ).toMatch(/tidak valid atau sudah kedaluwarsa/);
+      expect(redirect).not.toHaveBeenCalled();
+    },
+  );
+  test("verification rate limits fail closed before checking the code", async () => {
+    (rateLimit as jest.Mock).mockRejectedValue(
+      new Error("Terlalu banyak permintaan. Coba lagi nanti."),
+    );
+    expect(
+      (
+        await verifyCandidateLogin(
+          "rina@example.invalid",
+          "123456",
+          "/jobs/account",
+        )
+      ).error,
+    ).toMatch(/Terlalu banyak/);
+    expect(verifyOtp).not.toHaveBeenCalled();
+  });
 });

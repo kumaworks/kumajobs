@@ -23,7 +23,7 @@ For real recruitment data:
 
 1. Create `.env.development.local` yourself using `.env.example` as a template. Use the existing KumaWorks Supabase project URL, public anon key and server-only service-role key. Nothing in this project copies credentials from the sibling app.
 2. Set `NEXT_PUBLIC_JOBS_URL=http://localhost:3001` and `NEXT_PUBLIC_APP_URL=http://localhost:3000` (or the employer app's actual origin).
-3. In Supabase Auth → URL Configuration, allow `http://localhost:3001/jobs/auth/callback**` for local callback query parameters. Keep the employer callback configured too. The passwordless email must use the supplied redirect URL, not a hardcoded employer login URL.
+3. Configure the shared Supabase email templates for six-digit OTP as described below. Keep `http://localhost:3001/jobs/auth/callback**` allowed for existing email links and keep the employer callback configured too.
 4. Stop preview and run `npm run dev`. Start KumaWorks separately when testing employee onboarding.
 5. In KumaWorks → People → Recruitment, enable recruitment/public intake for a participating business and publish a vacancy. An empty portal is expected until a real employer publishes; the application does not seed production jobs.
 
@@ -41,6 +41,24 @@ Candidate uploads go directly to scoped signed URLs in private Supabase storage.
 
 Onboarding verifies the candidate's hired application and invitation, then hands the authenticated user to KumaWorks `/auth/recruitment`. Multiple employer provisioning remains transactional in the existing hiring service.
 
+## Candidate email OTP
+
+Candidate sign-in follows KumaMobile's six-digit email-code interaction: automatic verification after typing or pasting six digits, email autofill, a 60-second resend countdown, and an option to change the email. The portal remains passwordless for both new and existing accounts. Sending/resending uses `signInWithOtp`; verification uses `verifyOtp({ email, token, type: "email" })` on the server, persists the session through the SSR cookie adapter, then redirects to a validated `/jobs` return path. Existing callback links and the employer onboarding handoff remain supported.
+
+**Required shared Auth configuration before live use:** in Supabase Authentication → Email Templates, ensure both **Magic Link** (existing accounts) and **Confirm signup** (new accounts) visibly render `{{ .Token }}`. For example, add this block to the existing branded templates:
+
+```html
+<p>Masukkan kode ini di halaman tempat Anda meminta masuk:</p>
+<p style="font-size: 28px; font-weight: bold; letter-spacing: 8px;">{{ .Token }}</p>
+<p>Jika Anda tidak meminta kode ini, abaikan email ini.</p>
+```
+
+Keep the project's email OTP length at **6**, matching KumaMobile. Template changes affect the shared project: preserve links needed by the employer app and existing KumaMobile signup content; do not replace unrelated invitation or password recovery templates. Do not change the global Site URL. Supabase chooses code versus link content through its email templates, not a `signInWithOtp` flag ([Supabase email OTP guide](https://supabase.com/docs/guides/auth/auth-email-passwordless)). This repository change does not apply hosted Auth configuration.
+
+The existing send limits (per IP and normalized email) remain in place. Verification has separate server-side limits of five attempts per email and 30 per IP per five minutes. Invalid/expired codes never redirect. Provider delivery failures display a generic error instead of falsely reporting that an email was sent, without exposing provider account details. Preview mode blocks both sending and verification before service access.
+
+Before launch, test delivery for a new and an existing account, resend, expired/incorrect codes, and returning to an application after successful verification. Unit tests cover the actions and form with mocked Auth responses; they do not prove live email delivery or hosted template configuration.
+
 ## Current capability coverage
 
 | KumaWorks capability                          | Candidate portal                                                                                                 |
@@ -49,7 +67,7 @@ Onboarding verifies the candidate's hired application and invitation, then hands
 | Company careers settings                      | Company page, description, website, paginated vacancies                                                          |
 | Salary visibility                             | Public salary only; hidden amounts never reach the page or structured data                                       |
 | Versioned application builder                 | Four-step form, custom field types, CV/custom documents, salary questions, joining availability, complete review |
-| Candidate identity                            | Passwordless email, reusable profile, verified ownership and explicit manual-record claim                        |
+| Candidate identity                            | Passwordless email OTP, reusable profile, verified ownership and explicit manual-record claim                        |
 | Drafts and submissions                        | Autosave after verification, resume via actual job slug, original submitted answers and documents                |
 | Interview rounds                              | Timezone-aware invitations, confirmation/reschedule response and calendar download                               |
 | Offers                                        | Exact version, terms/components, PDF download, accept/decline response; database expiry/approval rules preserved |
@@ -78,7 +96,7 @@ In preview mode, open `/RUANG-KARYA` or `/loka-digital` to review the company la
 1. Put this folder in its own repository and import it as a **separate Vercel project**, framework Next.js, root directory `.`. Use `npm ci` and `npm run build`.
 2. Configure the variables from `.env.example` in Vercel. Set `NEXT_PUBLIC_JOBS_URL=https://jobs.kumaworks.id` and `NEXT_PUBLIC_APP_URL` to the employer production origin. Never prefix the service key or identity key with `NEXT_PUBLIC_`.
 3. Add `jobs.kumaworks.id` under this project's Settings → Domains. If it was attached to the employer project, move that domain to this project. Set the `jobs` CNAME to the project-specific value Vercel displays; keep the employer domain pointing to KumaWorks. See [Vercel domain setup](https://vercel.com/docs/domains/working-with-domains/add-a-domain).
-4. Add the production `/jobs/auth/callback` destination (with permitted `next` query values) to [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls). Keep KumaWorks `/auth/recruitment` and its invitation flow available. Do not change the global Auth Site URL to the jobs portal if the employer app relies on it; each candidate login supplies its own callback.
+4. Confirm the OTP email configuration above. Retain the production `/jobs/auth/callback` destination (with permitted `next` query values) in [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls). Keep KumaWorks `/auth/recruitment` and its invitation flow available. Do not change the global Auth Site URL to the jobs portal if the employer app relies on it; each candidate login supplies its own callback.
 5. Set **the employer app's** `NEXT_PUBLIC_JOBS_URL` to this same jobs origin so outbox emails link here. Legacy `/jobs/...` links are preserved; the new domain root opens `/jobs`.
 6. Run the email → application → scan → interview → offer → hire → employee onboarding pilot. The employer cron, scanner and email services must already be configured. Feature flags remain managed in KumaWorks and default off.
 

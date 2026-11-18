@@ -39,7 +39,13 @@ export async function requestCandidateLogin(
         error:
           "Mode pratinjau: tidak ada data yang disimpan atau email yang dikirim.",
       };
-    email = z.string().email().max(254).parse(email.trim().toLowerCase());
+    email = z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("Masukkan alamat email yang valid.")
+      .max(254)
+      .parse(email);
     const h = await headers(),
       ip = h.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
     await rateLimit(
@@ -51,33 +57,88 @@ export async function requestCandidateLogin(
       5,
       600,
     );
-    const base =
-      process.env.NEXT_PUBLIC_JOBS_URL ??
-      process.env.NEXT_PUBLIC_APP_URL ??
-      "http://localhost:3000";
+    const base = process.env.NEXT_PUBLIC_JOBS_URL ?? "http://localhost:3001";
     const client = await createClient();
-    // Always return the same public result, including provider account-specific errors.
-    await client.auth.signInWithOtp({
+    const { error } = await client.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: true,
         emailRedirectTo: `${base}/jobs/auth/callback?next=${encodeURIComponent(safeCandidateReturn(next))}`,
       },
     });
+    if (error)
+      return {
+        error:
+          error.status === 429
+            ? "Terlalu banyak permintaan. Tunggu sebentar sebelum meminta kode lagi."
+            : "Tidak dapat mengirim kode. Periksa alamat email dan coba lagi nanti.",
+      };
     return {
       data: {
         message:
-          "Jika email dapat digunakan, tautan masuk sudah dikirim. Periksa kotak masuk dan spam.",
+          "Jika email dapat digunakan, kode verifikasi sudah dikirim. Periksa kotak masuk dan spam.",
       },
     };
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Tidak dapat mengirim tautan masuk.",
-    };
+    return actionFailure(error, "Tidak dapat mengirim kode. Coba lagi nanti.");
   }
+}
+
+export async function verifyCandidateLogin(
+  email: string,
+  token: string,
+  next: string,
+): Promise<Result> {
+  try {
+    if (isPreview())
+      return {
+        error:
+          "Mode pratinjau: tidak ada data yang disimpan atau email yang dikirim.",
+      };
+    email = z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("Masukkan alamat email yang valid.")
+      .max(254)
+      .parse(email);
+    token = z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, "Masukkan kode 6 digit dari email Anda.")
+      .parse(token);
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
+    await rateLimit(
+      `auth-verify-ip:${createHash("sha256").update(ip).digest("hex")}`,
+      30,
+      300,
+    );
+    await rateLimit(
+      `auth-verify-email:${createHash("sha256").update(email).digest("hex")}`,
+      5,
+      300,
+    );
+    const client = await createClient();
+    const { data, error } = await client.auth.verifyOtp({
+      email,
+      token,
+      type: "email",
+    });
+    if (error || !data.session)
+      return {
+        error:
+          "Kode tidak valid atau sudah kedaluwarsa. Periksa kode atau minta kode baru.",
+      };
+  } catch (error) {
+    return actionFailure(
+      error,
+      "Tidak dapat memverifikasi kode. Coba lagi nanti.",
+    );
+  }
+  // Redirect throws in Next.js; keep it outside the error handler. The SSR
+  // client has persisted the verified session in host-only cookies by now.
+  redirect(safeCandidateReturn(next));
 }
 export async function candidateAction(
   name: string,

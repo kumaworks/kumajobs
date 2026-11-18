@@ -163,3 +163,24 @@ test("small screens and empty search remain usable in both themes", async ({
     page.getByRole("heading", { name: "Product Designer" }),
   ).toBeVisible();
 });
+
+test("email OTP login stays usable on mobile and preview never sends a code", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/jobs/login?next=%2Fjobs%2Fproduct-designer");
+  await expect(page.getByText(/Kami akan mengirim kode 6 digit/)).toBeVisible();
+  await page.getByLabel("Alamat email").fill("candidate@example.invalid");
+  await page.getByRole("button", { name: "Kirim kode verifikasi" }).click();
+  await expect(page.locator("#login-error")).toContainText("Mode pratinjau");
+  await expect(page.getByLabel("Kode verifikasi")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/login-otp-mobile.png",
+    fullPage: true,
+  });
+});

@@ -50,7 +50,8 @@ export default async function LoginPage({
             role="alert"
             className="mb-5 rounded-xl border border-red-500/30 p-4 text-sm text-red-500"
           >
-            Tautan sudah kedaluwarsa atau tidak valid. Minta tautan baru.
+            Sesi masuk sudah kedaluwarsa atau tidak valid. Minta kode verifikasi
+            baru.
           </p>
         )}
         <LoginForm next={safeCandidateReturn(p.next ?? null)} />

@@ -96,7 +96,9 @@ test("email sign-in sends a dedicated candidate return destination", async () =>
   fireEvent.change(screen.getByLabelText("Alamat email"), {
     target: { value: "rina@example.invalid" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Kirim tautan masuk" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Kirim kode verifikasi" }),
+  );
   await waitFor(() =>
     expect(requestCandidateLogin).toHaveBeenCalledWith(
       "rina@example.invalid",

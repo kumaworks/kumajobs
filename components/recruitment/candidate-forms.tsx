@@ -3,43 +3,16 @@ import { Check, CheckCircle2, LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { candidateAction, requestCandidateLogin } from "@/app/jobs/actions";
-import {
-  ActionForm,
-  Field,
-  inputClass,
-  buttonClass,
-  text,
-  Upload,
-} from "./forms";
+import { candidateAction } from "@/app/jobs/actions";
+import { LoginForm } from "./login-form";
+import { ActionForm, Field, inputClass, buttonClass, Upload } from "./forms";
 import {
   availability,
   availabilityLabels,
   type ApplicationInput,
   type PublicJob,
 } from "@/lib/recruitment/domain";
-export function LoginForm({ next = "/jobs/account" }: { next?: string }) {
-  return (
-    <ActionForm
-      label="Kirim tautan masuk"
-      submit={(f) => requestCandidateLogin(text(f, "email"), next)}
-    >
-      <Field label="Alamat email">
-        <input
-          required
-          type="email"
-          name="email"
-          autoComplete="email"
-          className={inputClass}
-        />
-      </Field>
-      <p className="text-sm text-muted-foreground">
-        Tidak perlu kata sandi. Kami akan mengirim tautan untuk memverifikasi
-        email Anda.
-      </p>
-    </ActionForm>
-  );
-}
+export { LoginForm };
 export function ApplyForm({
   job,
   signedIn,
