@@ -85,6 +85,22 @@
 .jobs-portal {
   overflow-wrap: anywhere;
 }
+.company-landing {
+  --primary: var(--company-primary-light);
+  --accent: var(--company-secondary);
+  --accent-foreground: var(--company-on-secondary);
+}
+.jobs-portal[data-theme="dark"] .company-landing {
+  --primary: var(--company-primary-dark);
+}
+@media (prefers-color-scheme: dark) {
+  .jobs-portal[data-theme="system"] .company-landing {
+    --primary: var(--company-primary-dark);
+  }
+}
+.company-landing section[aria-labelledby="company-heading"] a:focus-visible {
+  outline-color: var(--company-on-primary);
+}
 @media (prefers-reduced-motion: reduce) {
   .jobs-portal *,
   .jobs-portal *::before,

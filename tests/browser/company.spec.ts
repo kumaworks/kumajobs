@@ -1,5 +1,40 @@
 import { test, expect } from "@playwright/test";
 
+test("company colors apply to the banner and accents without changing the portal shell", async ({
+  page,
+}) => {
+  await page.goto("/loka-digital");
+  const banner = page.getByRole("region", { name: "Karier di Loka Digital" });
+  const button = page.getByRole("link", {
+    name: "Lihat lowongan",
+    exact: true,
+  });
+  for (const theme of ["terang", "gelap"]) {
+    await page
+      .getByRole("button", { name: `Tema ${theme}`, exact: true })
+      .click();
+    await expect(page.locator(".jobs-portal")).toHaveAttribute(
+      "data-theme",
+      theme === "gelap" ? "dark" : "light",
+    );
+    await expect(banner).toHaveCSS("background-color", "rgb(224, 231, 255)");
+    await expect(banner).toHaveCSS("color", "rgb(0, 0, 0)");
+    await expect(button).toHaveCSS("background-color", "rgb(67, 56, 202)");
+    await expect(button).toHaveCSS("color", "rgb(255, 255, 255)");
+    expect(
+      await page
+        .locator(".jobs-portal")
+        .evaluate((element) =>
+          getComputedStyle(element).getPropertyValue("--company-primary"),
+        ),
+    ).toBe("");
+  }
+  await page.goto("/ruang-karya");
+  await expect(
+    page.getByRole("region", { name: "Karier di Ruang Karya" }),
+  ).toHaveCSS("background-color", "rgb(22, 62, 48)");
+});
+
 test("short company URLs accept uppercase and show only that company's jobs", async ({
   page,
 }) => {

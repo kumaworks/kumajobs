@@ -9,6 +9,7 @@ import { createClient as createAdmin } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { publicJob, type Job, type PublicJob } from "./domain";
 import { normalizeCompanyCode } from "./company-url";
+import { companyColor, defaultCompanyColors } from "./company-colors";
 
 export function recruitmentDb() {
   if (isPreview())
@@ -150,7 +151,9 @@ export async function getPublicJobs(
   const page = Math.max(0, Math.floor(filter.page ?? 0));
   const { data, error } = await query.range(page * 50, page * 50 + 49);
   if (error) throw new Error(error.message);
-  const logos = await companyLogoUrls((data ?? []).map((row) => row.business_id));
+  const logos = await companyLogoUrls(
+    (data ?? []).map((row) => row.business_id),
+  );
   return (data ?? []).map((row) =>
     publicJob(
       { ...row, created_at: row.published_at } as Job,
@@ -318,6 +321,12 @@ export async function publicCompany(slug: string) {
       ? {
           company_name: job.company,
           slug: code,
+          primaryColor:
+            code === "loka-digital" ? "#e0e7ff" : defaultCompanyColors.primary,
+          secondaryColor:
+            code === "loka-digital"
+              ? "#4338ca"
+              : defaultCompanyColors.secondary,
           logoUrl: job.companyLogoUrl ?? null,
           description:
             "Tempat untuk ide yang berani, kolaborasi yang terbuka, dan pekerjaan yang berdampak. Temukan peran Anda bersama kami.",
@@ -327,7 +336,9 @@ export async function publicCompany(slug: string) {
   }
   const { data, error } = await recruitmentDb()
     .from("recruitment_settings")
-    .select("business_id,slug,company_name,description,website")
+    .select(
+      "business_id,slug,company_name,description,website,primary_color,secondary_color",
+    )
     .eq("slug", code)
     .eq("enabled", true)
     .eq("public_enabled", true)
@@ -338,6 +349,14 @@ export async function publicCompany(slug: string) {
   return {
     company_name: data.company_name,
     slug: data.slug as string,
+    primaryColor: companyColor(
+      data.primary_color,
+      defaultCompanyColors.primary,
+    ),
+    secondaryColor: companyColor(
+      data.secondary_color,
+      defaultCompanyColors.secondary,
+    ),
     description: data.description,
     website: data.website,
     logoUrl: logos.get(data.business_id) ?? null,

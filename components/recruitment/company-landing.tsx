@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { Building2, Globe } from "lucide-react";
 import { notFound } from "next/navigation";
 import { companyHref } from "@/lib/recruitment/company-url";
+import { companyColorVariables } from "@/lib/recruitment/company-colors";
 import { isPreview } from "@/lib/recruitment/preview";
 import { getPublicJobs, publicCompany } from "@/lib/recruitment/server";
 import { CompanyMark, JobCard } from "./job-discovery";
@@ -47,7 +49,15 @@ export async function CompanyLanding({
   const href = companyHref(company.slug);
 
   return (
-    <div>
+    <div
+      className="company-landing"
+      style={
+        companyColorVariables(
+          company.primaryColor,
+          company.secondaryColor,
+        ) as CSSProperties
+      }
+    >
       <Link
         href="/jobs"
         className="mb-6 inline-flex text-sm font-medium text-muted-foreground hover:text-primary"
@@ -56,12 +66,8 @@ export async function CompanyLanding({
       </Link>
       <section
         aria-labelledby="company-heading"
-        className="relative isolate overflow-hidden rounded-[2rem] bg-[#163e30] px-6 py-10 text-white sm:px-10 sm:py-14"
+        className="relative isolate overflow-hidden rounded-[2rem] bg-[var(--company-primary)] px-6 py-10 text-[var(--company-on-primary)] sm:px-10 sm:py-14"
       >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,#367858,transparent_65%)]"
-        />
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-32 -top-40 -z-10 size-[32rem] rounded-full border border-white/10 sm:right-0"
@@ -79,7 +85,7 @@ export async function CompanyLanding({
             />
           </div>
           <div className="max-w-3xl">
-            <p className="text-sm font-medium uppercase tracking-[0.16em] text-[#c9e6b4]">
+            <p className="text-sm font-medium uppercase tracking-[0.16em]">
               Bergabung bersama kami
             </p>
             <h1
@@ -89,14 +95,14 @@ export async function CompanyLanding({
               Karier di {company.company_name}
             </h1>
             {company.description && (
-              <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-white/80">
+              <p className="mt-5 whitespace-pre-wrap text-base leading-7">
                 {company.description}
               </p>
             )}
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <a
                 href="#company-jobs"
-                className="rounded-full bg-[#d5efbb] px-6 py-3 text-sm font-semibold text-[#163e30] hover:bg-white"
+                className="rounded-full bg-[var(--company-secondary)] px-6 py-3 text-sm font-semibold text-[var(--company-on-secondary)] hover:underline"
               >
                 Lihat lowongan
               </a>
@@ -105,7 +111,7 @@ export async function CompanyLanding({
                   href={website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full border border-white/30 px-5 py-3 text-sm font-medium hover:bg-white/10"
+                  className="inline-flex items-center gap-2 rounded-full border border-current px-5 py-3 text-sm font-medium hover:underline"
                 >
                   <Globe aria-hidden="true" className="size-4" /> Situs
                   perusahaan

@@ -75,3 +75,45 @@ test("company listings only query accepting public jobs for the selected company
   ]);
   expect(query.range).toHaveBeenCalledWith(50, 99);
 });
+
+test("public company projection reads saved colors without exposing private settings", async () => {
+  const query = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn().mockResolvedValue({
+      data: {
+        business_id: "business",
+        slug: "ptkago",
+        company_name: "Kago",
+        description: "",
+        website: "",
+        primary_color: "#E0E7FF",
+        secondary_color: "#4338CA",
+        reply_to: "private@example.invalid",
+      },
+      error: null,
+    }),
+  };
+  const logos = {
+    select: jest.fn().mockReturnThis(),
+    in: jest.fn().mockReturnThis(),
+    order: jest.fn(),
+  };
+  logos.order.mockImplementation((column) =>
+    column === "id" ? Promise.resolve({ data: [], error: null }) : logos,
+  );
+  jest
+    .mocked(createClient)
+    .mockReturnValue({
+      from: (table: string) => (table === "company_logos" ? logos : query),
+    } as never);
+  const company = await publicCompany("PTKAGO");
+  expect(company).toMatchObject({
+    primaryColor: "#e0e7ff",
+    secondaryColor: "#4338ca",
+  });
+  expect(company).not.toHaveProperty("reply_to");
+  expect(query.select).toHaveBeenCalledWith(
+    expect.stringContaining("primary_color,secondary_color"),
+  );
+});
