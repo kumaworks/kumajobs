@@ -32,6 +32,27 @@ export function companyTextColor(background: string) {
     : "#ffffff";
 }
 
+export function companyBannerGradient(value?: unknown) {
+  const primary = companyColor(value, defaultCompanyColors.primary);
+  const foreground = companyTextColor(primary);
+  const mix = (target: number) =>
+    "#" +
+    [1, 3, 5]
+      .map((offset) => {
+        const channel = parseInt(primary.slice(offset, offset + 2), 16);
+        return Math.round(channel * 0.8 + target * 0.2)
+          .toString(16)
+          .padStart(2, "0");
+      })
+      .join("");
+  const target = foreground === "#ffffff" ? 255 : 0;
+  const highlight = mix(target);
+  // If a tint/shade would reduce readability, move in the opposite direction.
+  const end =
+    contrastRatio(highlight, foreground) >= 4.5 ? highlight : mix(255 - target);
+  return `radial-gradient(ellipse at top right, ${end}, ${primary} 70%)`;
+}
+
 // Keep the chosen hue while making small text readable on the portal surfaces.
 function readableAccent(color: string, backgrounds: string[], target: number) {
   for (let step = 0; step <= 20; step++) {
@@ -66,6 +87,7 @@ export function companyColorVariables(
   );
   return {
     "--company-primary": primary,
+    "--company-banner-gradient": companyBannerGradient(primary),
     "--company-secondary": secondary,
     "--company-on-primary": companyTextColor(primary),
     "--company-on-secondary": companyTextColor(secondary),

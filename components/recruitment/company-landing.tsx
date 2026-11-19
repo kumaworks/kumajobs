@@ -66,6 +66,7 @@ export async function CompanyLanding({
       </Link>
       <section
         aria-labelledby="company-heading"
+        style={{ backgroundImage: "var(--company-banner-gradient)" }}
         className="relative isolate overflow-hidden rounded-[2rem] bg-[var(--company-primary)] px-6 py-10 text-[var(--company-on-primary)] sm:px-10 sm:py-14"
       >
         <div

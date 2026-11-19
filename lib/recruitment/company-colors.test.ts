@@ -22,6 +22,14 @@ test("light, dark, and saturated brand colors retain readable text and accents",
     const colors = companyColorVariables(color, color);
     expect(colors["--company-primary"]).toBe(color.toLowerCase());
     expect(colors["--company-secondary"]).toBe(color.toLowerCase());
+    const gradientStops =
+      colors["--company-banner-gradient"].match(/#[0-9a-f]{6}/g)!;
+    expect(gradientStops[1]).toBe(color.toLowerCase());
+    expect(gradientStops[0]).not.toBe(gradientStops[1]);
+    for (const stop of gradientStops)
+      expect(
+        contrastRatio(stop, colors["--company-on-primary"]),
+      ).toBeGreaterThanOrEqual(4.5);
     expect(
       contrastRatio(color, colors["--company-on-primary"]),
     ).toBeGreaterThanOrEqual(4.5);

@@ -18,6 +18,10 @@ test("company colors apply to the banner and accents without changing the portal
       theme === "gelap" ? "dark" : "light",
     );
     await expect(banner).toHaveCSS("background-color", "rgb(224, 231, 255)");
+    await expect(banner).toHaveCSS(
+      "background-image",
+      /^radial-gradient\(.*rgb\(224, 231, 255\) 70%\)$/,
+    );
     await expect(banner).toHaveCSS("color", "rgb(0, 0, 0)");
     await expect(button).toHaveCSS("background-color", "rgb(67, 56, 202)");
     await expect(button).toHaveCSS("color", "rgb(255, 255, 255)");
