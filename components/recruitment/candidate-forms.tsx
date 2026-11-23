@@ -5,13 +5,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { candidateAction } from "@/app/jobs/actions";
 import { LoginForm } from "./login-form";
-import { ActionForm, Field, inputClass, buttonClass, Upload } from "./forms";
+import { ActionForm, Field, inputClass, buttonClass } from "./forms";
 import {
   availability,
   availabilityLabels,
   type ApplicationInput,
   type PublicJob,
 } from "@/lib/recruitment/domain";
+import {
+  ApplicationDocument,
+  matchesDocumentFormat,
+  type CandidateDocument,
+  type DocumentRequirement,
+} from "./application-document";
 export { LoginForm };
 export function ApplyForm({
   job,
@@ -26,7 +32,7 @@ export function ApplyForm({
   signedIn: boolean;
   profile?: { name: string; phone: string } | null;
   existing?: { input: ApplicationInput; stage: string } | null;
-  documents?: { id: string; name: string; scan_status: string }[];
+  documents?: CandidateDocument[];
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0),
@@ -43,8 +49,77 @@ export function ApplyForm({
     [saved, setSaved] = useState(""),
     [submitted, setSubmitted] = useState(false),
     [profileReady, setProfileReady] = useState(Boolean(profile));
-  const payload = JSON.stringify(values);
   const existingStage = existing?.stage;
+  const [uploadedDocuments, setUploadedDocuments] = useState<
+    CandidateDocument[]
+  >([]);
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const allDocuments = [
+    ...documents,
+    ...uploadedDocuments.filter(
+      (uploaded) => !documents.some((document) => document.id === uploaded.id),
+    ),
+  ];
+  const documentRequirements: DocumentRequirement[] = [
+    ...(job.form.cv !== "off"
+      ? [
+          {
+            id: "cv",
+            label: "CV",
+            required: job.form.cv === "required",
+            instructions: "",
+            formats: ["pdf", "docx", "jpg", "png"],
+          },
+        ]
+      : []),
+    ...job.form.documents,
+  ];
+  const uploadingDocument = Object.values(uploading).some(Boolean);
+  const incompleteDocuments = documentRequirements.filter((requirement) => {
+    const id = values.documents[requirement.id];
+    if (!id) return requirement.required;
+    const document = allDocuments.find((item) => item.id === id);
+    return (
+      !document ||
+      document.scan_status !== "clean" ||
+      !matchesDocumentFormat(document, requirement.formats)
+    );
+  });
+  const hasPendingDocuments = allDocuments.some(
+    (document) => document.scan_status === "pending",
+  );
+  useEffect(() => {
+    if (
+      preview ||
+      !signedIn ||
+      submitted ||
+      !hasPendingDocuments ||
+      step !== 1 ||
+      (existingStage && existingStage !== "draft")
+    )
+      return;
+    const timer = setInterval(() => router.refresh(), 5000);
+    return () => clearInterval(timer);
+  }, [
+    preview,
+    signedIn,
+    submitted,
+    hasPendingDocuments,
+    step,
+    router,
+    existingStage,
+  ]);
+  const selectDocument = (field: string, id: string) =>
+    setValues((current) => ({
+      ...current,
+      documents: Object.fromEntries(
+        Object.entries({ ...current.documents, [field]: id }).filter(
+          ([, value]) => value,
+        ),
+      ),
+    }));
+  const payload = JSON.stringify(values);
+
   useEffect(() => {
     if (
       preview ||
@@ -102,7 +177,7 @@ export function ApplyForm({
           {
             [
               "Mulai cerita Anda",
-              "Profil yang berbicara",
+              "Lengkapi dokumen lamaran",
               "Kenalkan potensi Anda",
               "Siap mengambil langkah?",
             ][step]
@@ -182,63 +257,45 @@ export function ApplyForm({
       {step === 1 && (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Dokumen baru diperiksa sebelum dapat digunakan. Pilih dokumen yang
-            sudah siap dari pustaka Anda.
+            {documentRequirements.length
+              ? "Unggah file pada bagian yang sesuai. File langsung terpasang setelah selesai diperiksa."
+              : "Tidak ada dokumen yang diminta. Silakan lanjutkan."}
           </p>
-          <Upload />
-          {[
-            ...(job.form.cv !== "off"
-              ? [
-                  {
-                    id: "cv",
-                    label: "CV",
-                    required: job.form.cv === "required",
-                    instructions: "",
-                  },
-                ]
-              : []),
-            ...job.form.documents,
-          ].map((d) => (
-            <Field
-              key={d.id}
-              label={`${d.label}${d.required ? " *" : " (opsional)"}`}
-            >
-              <select
-                value={values.documents[d.id] ?? ""}
-                onChange={(e) =>
-                  update(
-                    "documents",
-                    Object.fromEntries(
-                      Object.entries({
-                        ...values.documents,
-                        [d.id]: e.target.value,
-                      }).filter(([, v]) => v),
-                    ),
-                  )
-                }
-                className={inputClass}
-              >
-                <option value="">Pilih dokumen</option>
-                {documents
-                  .filter((doc) => doc.scan_status === "clean")
-                  .map((doc) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.name}
-                    </option>
-                  ))}
-              </select>
-              <span className="text-xs text-muted-foreground">
-                {d.instructions}
-              </span>
-            </Field>
+          {documentRequirements.map((requirement) => (
+            <ApplicationDocument
+              key={requirement.id}
+              requirement={requirement}
+              selectedId={values.documents[requirement.id]}
+              documents={allDocuments}
+              busy={Boolean(uploading[requirement.id])}
+              onSelect={(id) => selectDocument(requirement.id, id)}
+              onBusyChange={(busy) =>
+                setUploading((current) => ({
+                  ...current,
+                  [requirement.id]: busy,
+                }))
+              }
+              onUploaded={(id, name) => {
+                setUploadedDocuments((current) => [
+                  ...current,
+                  { id, name, scan_status: "pending" },
+                ]);
+                selectDocument(requirement.id, id);
+              }}
+            />
           ))}
-          <button
-            type="button"
-            className="text-sm underline"
-            onClick={() => router.refresh()}
-          >
-            Muat ulang status dokumen
-          </button>
+          {incompleteDocuments.length > 0 && (
+            <p
+              id="document-next-help"
+              className="text-sm text-muted-foreground"
+            >
+              Lengkapi dokumen dan tunggu hingga siap digunakan:{" "}
+              {incompleteDocuments
+                .map((requirement) => requirement.label)
+                .join(", ")}
+              .
+            </p>
+          )}
         </div>
       )}
       {step === 2 && (
@@ -416,7 +473,7 @@ export function ApplyForm({
                     : job.form.documents.find((d) => d.id === key)?.label}
                 </dt>
                 <dd className="mt-1">
-                  {documents.find((d) => d.id === id)?.name ??
+                  {allDocuments.find((d) => d.id === id)?.name ??
                     "Dokumen dipilih"}
                 </dd>
               </div>
@@ -477,6 +534,7 @@ export function ApplyForm({
           <button
             type="button"
             className="rounded-lg border px-4 py-2 text-sm"
+            disabled={uploadingDocument}
             onClick={() => setStep(step - 1)}
           >
             Kembali
@@ -486,6 +544,15 @@ export function ApplyForm({
           <button
             type="button"
             className={buttonClass}
+            disabled={
+              step === 1 &&
+              (uploadingDocument || incompleteDocuments.length > 0)
+            }
+            aria-describedby={
+              step === 1 && incompleteDocuments.length > 0
+                ? "document-next-help"
+                : undefined
+            }
             onClick={() => setStep(step + 1)}
           >
             Lanjutkan

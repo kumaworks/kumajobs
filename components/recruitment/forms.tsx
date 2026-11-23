@@ -1,6 +1,6 @@
 "use client";
 import { UploadCloud, LoaderCircle } from "lucide-react";
-import { useState, useTransition, type ReactNode } from "react";
+import { useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { MAX_FILE_BYTES, type Result } from "@/lib/recruitment/domain";
 import { prepareCandidateUpload } from "@/app/jobs/actions";
@@ -87,86 +87,136 @@ export function ActionForm({
 export function Upload({
   category = "application",
   onUploaded,
+  onBusyChange,
+  label = "Pilih file",
+  formats,
+  compact = false,
 }: {
   category?: "application" | "identity";
-  onUploaded?: (id: string) => void;
+  onUploaded?: (id: string, name: string) => void;
+  onBusyChange?: (busy: boolean) => void;
+  label?: string;
+  formats?: string[];
+  compact?: boolean;
 }) {
+  const inputId = useId();
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
+    [error, setError] = useState(false),
     [progress, setProgress] = useState(0),
     router = useRouter();
+  const extensions =
+    formats ??
+    (category === "identity"
+      ? ["pdf", "jpg", "png"]
+      : ["pdf", "docx", "jpg", "png"]);
   return (
-    <div className="rounded-2xl border border-dashed border-primary/30 bg-accent/30 p-5">
-      <UploadCloud className="mb-3 size-6 text-primary" />
-      <p className="mb-3 text-sm font-medium">Tambahkan dokumen Anda</p>
-      <input
-        type="file"
-        aria-label="Unggah dokumen"
-        accept={
-          category === "identity"
-            ? ".pdf,.jpg,.jpeg,.png"
-            : ".pdf,.docx,.jpg,.jpeg,.png"
-        }
-        disabled={busy}
-        className="w-full text-xs text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-medium file:text-primary-foreground"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          setBusy(true);
-          setMessage("");
-          try {
-            if (file.size === 0 || file.size > MAX_FILE_BYTES)
-              throw new Error("Batas ukuran dokumen 10 MB.");
-            setProgress(0);
-            const result = await prepareCandidateUpload({
-              name: file.name,
-              bytes: file.size,
-              category,
-              header: Array.from(
-                new Uint8Array(await file.slice(0, 16).arrayBuffer()),
-              ),
-            });
-            if (result.error) setMessage(result.error);
-            else if (result.data) {
-              const target = result.data;
-              await new Promise<void>((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open("PUT", target.signedUrl);
-                xhr.timeout = 120000;
-                xhr.upload.onprogress = (event) => {
-                  if (event.lengthComputable)
-                    setProgress(Math.round((event.loaded / event.total) * 100));
-                };
-                xhr.onload = () =>
-                  xhr.status >= 200 && xhr.status < 300
-                    ? resolve()
-                    : reject(new Error("Unggah gagal. Coba lagi."));
-                xhr.onerror = () =>
-                  reject(new Error("Koneksi terputus. Coba lagi."));
-                xhr.ontimeout = () =>
-                  reject(new Error("Unggah terlalu lama. Coba lagi."));
-                const body = new FormData();
-                body.append("cacheControl", "0");
-                body.append("", file);
-                xhr.send(body);
+    <div
+      className={
+        compact
+          ? "space-y-2"
+          : "rounded-2xl border border-dashed border-primary/30 bg-accent/30 p-5"
+      }
+    >
+      {!compact && (
+        <>
+          <UploadCloud className="mb-3 size-6 text-primary" />
+          <p className="mb-3 text-sm font-medium">Tambahkan dokumen Anda</p>
+        </>
+      )}
+      <label
+        htmlFor={inputId}
+        className={`${buttonClass} relative cursor-pointer focus-within:ring-2 focus-within:ring-primary/30 ${busy ? "opacity-50" : ""}`}
+      >
+        <UploadCloud aria-hidden="true" className="size-4" />
+        {busy ? "Mengunggah…" : label}
+        <input
+          id={inputId}
+          type="file"
+          aria-label={compact ? label : "Unggah dokumen"}
+          aria-describedby={`${inputId}-help`}
+          accept={extensions
+            .flatMap((ext) => (ext === "jpg" ? [".jpg", ".jpeg"] : [`.${ext}`]))
+            .join(",")}
+          disabled={busy}
+          className="sr-only"
+          onChange={async (e) => {
+            const input = e.currentTarget;
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setBusy(true);
+            onBusyChange?.(true);
+            setError(false);
+            setMessage("");
+            try {
+              if (file.size === 0 || file.size > MAX_FILE_BYTES)
+                throw new Error("Batas ukuran dokumen 10 MB.");
+              const extension = file.name
+                .split(".")
+                .pop()
+                ?.toLowerCase()
+                .replace(/^jpeg$/, "jpg");
+              if (!extension || !extensions.includes(extension))
+                throw new Error(
+                  `Gunakan file ${extensions.join(", ").toUpperCase()}.`,
+                );
+              setProgress(0);
+              const result = await prepareCandidateUpload({
+                name: file.name,
+                bytes: file.size,
+                category,
+                header: Array.from(
+                  new Uint8Array(await file.slice(0, 16).arrayBuffer()),
+                ),
               });
+              if (result.error) throw new Error(result.error);
+              else if (result.data) {
+                const target = result.data;
+                await new Promise<void>((resolve, reject) => {
+                  const xhr = new XMLHttpRequest();
+                  xhr.open("PUT", target.signedUrl);
+                  xhr.timeout = 120000;
+                  xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable)
+                      setProgress(
+                        Math.round((event.loaded / event.total) * 100),
+                      );
+                  };
+                  xhr.onload = () =>
+                    xhr.status >= 200 && xhr.status < 300
+                      ? resolve()
+                      : reject(new Error("Unggah gagal. Coba lagi."));
+                  xhr.onerror = () =>
+                    reject(new Error("Koneksi terputus. Coba lagi."));
+                  xhr.ontimeout = () =>
+                    reject(new Error("Unggah terlalu lama. Coba lagi."));
+                  const body = new FormData();
+                  body.append("cacheControl", "0");
+                  body.append("", file);
+                  xhr.send(body);
+                });
+                if (!compact)
+                  setMessage(
+                    `${target.name}: menunggu pemeriksaan keamanan. Muat ulang setelah pemeriksaan selesai.`,
+                  );
+                onUploaded?.(target.id, target.name);
+                router.refresh();
+              }
+            } catch (error) {
+              setError(true);
               setMessage(
-                `${target.name}: menunggu pemeriksaan keamanan. Muat ulang setelah pemeriksaan selesai.`,
+                error instanceof Error
+                  ? error.message
+                  : "Unggah gagal. Coba lagi.",
               );
-              onUploaded?.(target.id);
-              router.refresh();
+            } finally {
+              setBusy(false);
+              onBusyChange?.(false);
+              input.value = "";
             }
-          } catch (error) {
-            setMessage(
-              error instanceof Error
-                ? error.message
-                : "Unggah gagal. Coba lagi.",
-            );
-          } finally {
-            setBusy(false);
-          }
-        }}
-      />
+          }}
+        />
+      </label>
       {busy && (
         <progress
           aria-label="Progres unggahan"
@@ -175,9 +225,17 @@ export function Upload({
           className="mt-2 w-full"
         />
       )}
-      <p role="status" className="mt-2 text-xs text-muted-foreground">
-        Maksimum 10 MB. {busy ? `Mengunggah… ${progress}%` : message}
+      <p id={`${inputId}-help`} className="mt-2 text-xs text-muted-foreground">
+        {extensions.join(", ").toUpperCase()} · Maksimum 10 MB per file.
       </p>
+      {(busy || message) && (
+        <p
+          role={error ? "alert" : "status"}
+          className={`text-sm ${error ? "text-red-600" : "text-muted-foreground"}`}
+        >
+          {busy ? `Mengunggah… ${progress}%` : message}
+        </p>
+      )}
     </div>
   );
 }

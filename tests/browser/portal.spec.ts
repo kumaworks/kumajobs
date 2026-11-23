@@ -184,3 +184,40 @@ test("email OTP login stays usable on mobile and preview never sends a code", as
     fullPage: true,
   });
 });
+
+test("document step gives a direct upload action without an empty picker", async ({
+  page,
+}) => {
+  await page.goto("/jobs/product-designer");
+  await page
+    .getByRole("button", { name: "Simpan profil dan lanjutkan" })
+    .click();
+  const form = page
+    .locator("section")
+    .filter({
+      has: page.getByRole("heading", { name: "Lengkapi dokumen lamaran" }),
+    });
+  await expect(form.getByRole("combobox")).toHaveCount(0);
+  await expect(form.getByText("Unggah CV", { exact: true })).toBeVisible();
+  await expect(form.getByText(/Gunakan file tersimpan/)).toHaveCount(0);
+  await expect(
+    form.getByRole("button", { name: "Lanjutkan", exact: true }),
+  ).toBeEnabled();
+  await form.screenshot({ path: "test-results/documents-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await form.screenshot({ path: "test-results/documents-mobile.png" });
+  await page
+    .getByLabel("Unggah CV", { exact: true })
+    .setInputFiles({
+      name: "CV.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.7 preview"),
+    });
+  await expect(form.getByRole("alert")).toContainText("Mode pratinjau");
+  await expect(page.getByLabel("Unggah CV", { exact: true })).toBeEnabled();
+});
