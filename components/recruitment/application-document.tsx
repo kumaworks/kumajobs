@@ -1,12 +1,13 @@
 "use client";
 
-import { CheckCircle2, FileText, LoaderCircle } from "lucide-react";
+import { CheckCircle2, FileText } from "lucide-react";
 import { Upload } from "./forms";
 
 export type CandidateDocument = {
   id: string;
   name: string;
   scan_status: string;
+  created_at?: string;
 };
 
 export type DocumentRequirement = {
@@ -79,11 +80,6 @@ export function ApplicationDocument({
                 aria-hidden="true"
                 className="size-5 shrink-0 text-primary"
               />
-            ) : pending ? (
-              <LoaderCircle
-                aria-hidden="true"
-                className="size-5 shrink-0 animate-spin text-primary"
-              />
             ) : (
               <FileText aria-hidden="true" className="size-5 shrink-0" />
             )}
@@ -95,7 +91,7 @@ export function ApplicationDocument({
             {ready
               ? "Siap digunakan · Sudah terpasang pada lamaran ini."
               : pending
-                ? "File terunggah. Sedang diperiksa, status akan diperbarui otomatis."
+                ? "File terpilih. Anda dapat lanjut mengisi lamaran. Pemeriksaan berlangsung sebelum lamaran dikirim."
                 : "File ini tidak dapat digunakan. Unggah file lain atau pilih file tersimpan."}
           </p>
           <button

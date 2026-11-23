@@ -125,7 +125,8 @@ async function openDocuments() {
   fireEvent.click(
     screen.getByRole("button", { name: "Simpan profil dan lanjutkan" }),
   );
-  await screen.findByLabelText("Unggah CV");
+  await screen.findByRole("heading", { name: "Lengkapi dokumen lamaran" });
+  await act(async () => {});
 }
 
 test("empty document library offers direct upload and blocks a missing required CV", async () => {
@@ -171,9 +172,9 @@ test("upload attaches to CV automatically and becomes usable when scanning compl
     });
     await screen.findByText(document.name);
     expect(
-      screen.getByText(/File terunggah. Sedang diperiksa/),
+      screen.getByText(/File terpilih. Anda dapat lanjut/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lanjutkan" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Lanjutkan" })).toBeEnabled();
     rerender(
       <ApplyForm
         job={cvJob}
@@ -214,8 +215,8 @@ test("pending saved files refresh automatically and rejected files can be replac
     />,
   );
   await openDocuments();
-  fireEvent.click(screen.getByRole("button", { name: /CV.pdf/ }));
-  expect(screen.getByRole("button", { name: "Lanjutkan" })).toBeDisabled();
+  expect(screen.getByText("CV.pdf")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Lanjutkan" })).toBeEnabled();
   jest.useFakeTimers();
   // Re-enter the step to start its polling effect with the test clock.
   fireEvent.click(screen.getByRole("button", { name: "Kembali" }));
@@ -279,6 +280,7 @@ test("optional documents may be skipped and saved files respect the required for
     />,
   );
   await openDocuments();
+  fireEvent.click(await screen.findByRole("button", { name: "Lepas file" }));
   const portfolio = screen.getByRole("group", { name: "Portofolio (wajib)" });
   expect(
     within(portfolio).queryByRole("button", { name: /Portfolio.docx/ }),
@@ -301,4 +303,111 @@ test("invalid uploads explain how to retry without attaching a file", async () =
   expect(prepareCandidateUpload).not.toHaveBeenCalled();
   expect(screen.getByLabelText("Unggah CV")).toBeEnabled();
   expect(screen.getByRole("button", { name: "Lanjutkan" })).toBeDisabled();
+});
+
+test("automatically selects the newest eligible upload by date and preserves a manual choice", async () => {
+  const documents = [
+    {
+      id: "old",
+      name: "Older.pdf",
+      scan_status: "clean",
+      created_at: "2026-11-20T10:00:00Z",
+    },
+    {
+      id: "bad",
+      name: "Rejected.pdf",
+      scan_status: "infected",
+      created_at: "2026-11-23T10:00:00Z",
+    },
+    {
+      id: "new",
+      name: "Newest.pdf",
+      scan_status: "pending",
+      created_at: "2026-11-22T10:00:00Z",
+    },
+  ];
+  const props = {
+    job: cvJob,
+    signedIn: true,
+    profile: candidateProfile,
+    documents,
+  };
+  const { rerender } = render(<ApplyForm {...props} />);
+  await openDocuments();
+  expect(
+    screen.getByText("Newest.pdf").closest('[role="status"]'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Rejected.pdf")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Lanjutkan" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: /Older.pdf/ }));
+  rerender(
+    <ApplyForm
+      {...props}
+      documents={[
+        ...documents,
+        {
+          id: "later",
+          name: "Later.pdf",
+          scan_status: "clean",
+          created_at: "2026-11-24T10:00:00Z",
+        },
+      ]}
+    />,
+  );
+  expect(
+    screen.getByText("Older.pdf").closest('[role="status"]'),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Lepas file" }));
+  expect(screen.getByLabelText("Unggah CV")).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Lanjutkan" })).toBeDisabled();
+});
+
+test("pending CV can advance to review, which refreshes until submission is ready", async () => {
+  const document = {
+    id: "pending",
+    name: "Latest.pdf",
+    scan_status: "pending",
+    created_at: "2026-11-23T10:00:00Z",
+  };
+  const props = {
+    job: cvJob,
+    signedIn: true,
+    profile: candidateProfile,
+    documents: [document],
+  };
+  const { rerender, unmount } = render(<ApplyForm {...props} />);
+  await openDocuments();
+  jest.useFakeTimers();
+  try {
+    fireEvent.click(screen.getByRole("button", { name: "Lanjutkan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lanjutkan" }));
+    expect(screen.getByText("Latest.pdf")).toBeInTheDocument();
+    expect(screen.getByText(/Menunggu pemeriksaan: CV/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Kirim lamaran" }),
+    ).toBeDisabled();
+    mockRouter.refresh.mockClear();
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+    expect(mockRouter.refresh).toHaveBeenCalled();
+    rerender(
+      <ApplyForm
+        {...props}
+        documents={[{ ...document, scan_status: "clean" }]}
+      />,
+    );
+    expect(
+      screen.queryByText(/Menunggu pemeriksaan: CV/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kirim lamaran" })).toBeEnabled();
+    mockRouter.refresh.mockClear();
+    await act(async () => {
+      jest.advanceTimersByTime(10000);
+    });
+    expect(mockRouter.refresh).not.toHaveBeenCalled();
+  } finally {
+    unmount();
+    jest.useRealTimers();
+  }
 });

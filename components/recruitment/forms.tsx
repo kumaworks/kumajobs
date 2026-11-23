@@ -27,8 +27,10 @@ export function ActionForm({
   submit,
   label = "Save",
   onSuccess,
+  disabled = false,
 }: {
   children?: ReactNode;
+  disabled?: boolean;
   submit: (form: FormData) => Promise<Result>;
   label?: string;
   onSuccess?: (data: Record<string, unknown>) => void;
@@ -42,6 +44,7 @@ export function ActionForm({
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
+        if (disabled || pending) return;
         const data = new FormData(e.currentTarget);
         start(async () => {
           try {
@@ -65,7 +68,7 @@ export function ActionForm({
       }}
     >
       {children}
-      <button disabled={pending} className={buttonClass}>
+      <button disabled={disabled || pending} className={buttonClass}>
         {pending && <LoaderCircle className="size-4 animate-spin" />}
         {pending ? "Memproses…" : label}
       </button>

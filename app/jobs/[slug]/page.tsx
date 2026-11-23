@@ -61,10 +61,11 @@ export default async function JobPage({
     session?.candidate && db
       ? await db
           .from("recruitment_documents")
-          .select("id,name,scan_status")
+          .select("id,name,scan_status,created_at")
           .eq("candidate_id", session.candidate.id)
           .eq("category", "application")
           .is("deleted_at", null)
+          .order("created_at", { ascending: false })
       : { data: [] };
   const schema = {
     "@context": "https://schema.org",

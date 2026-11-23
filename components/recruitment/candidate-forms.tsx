@@ -74,6 +74,32 @@ export function ApplyForm({
       : []),
     ...job.form.documents,
   ];
+  const [manualCvSelection, setManualCvSelection] = useState(false);
+  const latestCvId =
+    job.form.cv === "off"
+      ? undefined
+      : allDocuments
+          .filter(
+            (document) =>
+              ["clean", "pending"].includes(document.scan_status) &&
+              matchesDocumentFormat(document, ["pdf", "docx", "jpg", "png"]),
+          )
+          .sort(
+            (a, b) =>
+              (Date.parse(b.created_at ?? "") || 0) -
+              (Date.parse(a.created_at ?? "") || 0),
+          )[0]?.id;
+  useEffect(() => {
+    if (step !== 1 || manualCvSelection || !latestCvId) return;
+    setValues((current) =>
+      current.documents.cv === latestCvId
+        ? current
+        : {
+            ...current,
+            documents: { ...current.documents, cv: latestCvId },
+          },
+    );
+  }, [step, manualCvSelection, latestCvId]);
   const uploadingDocument = Object.values(uploading).some(Boolean);
   const incompleteDocuments = documentRequirements.filter((requirement) => {
     const id = values.documents[requirement.id];
@@ -81,10 +107,16 @@ export function ApplyForm({
     const document = allDocuments.find((item) => item.id === id);
     return (
       !document ||
-      document.scan_status !== "clean" ||
+      !["clean", "pending"].includes(document.scan_status) ||
       !matchesDocumentFormat(document, requirement.formats)
     );
   });
+  const pendingSelectedDocuments = documentRequirements.filter(
+    (requirement) =>
+      allDocuments.find(
+        (document) => document.id === values.documents[requirement.id],
+      )?.scan_status === "pending",
+  );
   const hasPendingDocuments = allDocuments.some(
     (document) => document.scan_status === "pending",
   );
@@ -94,7 +126,7 @@ export function ApplyForm({
       !signedIn ||
       submitted ||
       !hasPendingDocuments ||
-      step !== 1 ||
+      step === 0 ||
       (existingStage && existingStage !== "draft")
     )
       return;
@@ -109,7 +141,8 @@ export function ApplyForm({
     router,
     existingStage,
   ]);
-  const selectDocument = (field: string, id: string) =>
+  const selectDocument = (field: string, id: string) => {
+    if (field === "cv") setManualCvSelection(true);
     setValues((current) => ({
       ...current,
       documents: Object.fromEntries(
@@ -118,6 +151,7 @@ export function ApplyForm({
         ),
       ),
     }));
+  };
   const payload = JSON.stringify(values);
 
   useEffect(() => {
@@ -258,7 +292,9 @@ export function ApplyForm({
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {documentRequirements.length
-              ? "Unggah file pada bagian yang sesuai. File langsung terpasang setelah selesai diperiksa."
+              ? job.form.cv !== "off"
+                ? "File terbaru dipilih otomatis untuk CV. Anda bisa menggantinya jika perlu."
+                : "Unggah file pada bagian yang sesuai."
               : "Tidak ada dokumen yang diminta. Silakan lanjutkan."}
           </p>
           {documentRequirements.map((requirement) => (
@@ -278,7 +314,12 @@ export function ApplyForm({
               onUploaded={(id, name) => {
                 setUploadedDocuments((current) => [
                   ...current,
-                  { id, name, scan_status: "pending" },
+                  {
+                    id,
+                    name,
+                    scan_status: "pending",
+                    created_at: new Date().toISOString(),
+                  },
                 ]);
                 selectDocument(requirement.id, id);
               }}
@@ -289,7 +330,7 @@ export function ApplyForm({
               id="document-next-help"
               className="text-sm text-muted-foreground"
             >
-              Lengkapi dokumen dan tunggu hingga siap digunakan:{" "}
+              Lengkapi dokumen berikut untuk melanjutkan:{" "}
               {incompleteDocuments
                 .map((requirement) => requirement.label)
                 .join(", ")}
@@ -514,8 +555,30 @@ export function ApplyForm({
             />
             Saya bersedia dihubungi untuk peluang berikutnya (opsional).
           </label>
+          {(pendingSelectedDocuments.length > 0 ||
+            incompleteDocuments.length > 0) && (
+            <div role="status" className="rounded-xl border p-3 text-sm">
+              <p>
+                {incompleteDocuments.length > 0
+                  ? "Ada dokumen yang belum lengkap atau tidak dapat digunakan. Periksa kembali dokumen Anda."
+                  : `Menunggu pemeriksaan: ${pendingSelectedDocuments.map((requirement) => requirement.label).join(", ")}. Tombol kirim akan aktif otomatis setelah pemeriksaan selesai.`}
+              </p>
+              <button
+                type="button"
+                className="mt-2 underline"
+                onClick={() => setStep(1)}
+              >
+                Lihat dokumen
+              </button>
+            </div>
+          )}
           <ActionForm
             label="Kirim lamaran"
+            disabled={
+              uploadingDocument ||
+              incompleteDocuments.length > 0 ||
+              pendingSelectedDocuments.length > 0
+            }
             submit={async () => {
               const r = await candidateAction(
                 "submit",
