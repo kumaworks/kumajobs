@@ -7,7 +7,14 @@ import {
   requestCandidateLogin,
   verifyCandidateLogin,
 } from "./actions";
-import { candidateSession, command, rateLimit } from "@/lib/recruitment/server";
+import { formSchema } from "@/lib/recruitment/domain";
+import {
+  candidateSession,
+  command,
+  rateLimit,
+  recruitmentDb,
+  getPublicJobs,
+} from "@/lib/recruitment/server";
 import { isPreview } from "@/lib/recruitment/preview";
 jest.mock("next/cache", () => ({ revalidatePath: jest.fn() }));
 jest.mock("next/headers", () => ({ headers: jest.fn() }));
@@ -226,5 +233,99 @@ describe("candidate email OTP", () => {
       ).error,
     ).toMatch(/Terlalu banyak/);
     expect(verifyOtp).not.toHaveBeenCalled();
+  });
+});
+
+describe("submission with quarantined attachments", () => {
+  const documentId = "00000000-0000-0000-0000-000000000002";
+  const input = {
+    name: "Rina",
+    phone: "+628123456789",
+    privacyConsent: true,
+    futureConsent: false,
+    answers: {},
+    documents: { cv: documentId },
+  };
+  const baseDocument = {
+    extension: "pdf",
+    candidate_id: "owned-candidate",
+    category: "application",
+    scan_status: "pending",
+    deleted_at: null,
+  };
+  beforeEach(() => {
+    (getPublicJobs as jest.Mock).mockResolvedValue([
+      {
+        accepting: true,
+        form: formSchema.parse({
+          cv: "required",
+          availability: false,
+          expectedSalary: "off",
+        }),
+      },
+    ]);
+  });
+  function mockDocument(
+    document:
+      | (Omit<typeof baseDocument, "deleted_at"> & {
+          deleted_at: string | null;
+        })
+      | null,
+  ) {
+    (recruitmentDb as jest.Mock).mockReturnValue({
+      from: (table: string) => {
+        const query = {
+          select: () => query,
+          eq: () => query,
+          single: async () => ({
+            data:
+              table === "recruitment_jobs" ? { slug: "supervisor" } : document,
+          }),
+        };
+        return query;
+      },
+    });
+  }
+  test.each(["pending", "clean"])(
+    "%s attachment is submitted for database ownership and upload checks",
+    async (status) => {
+      mockDocument({ ...baseDocument, scan_status: status });
+      const result = await candidateAction("submit", offerId, 1, input);
+      expect(result.error).toBeUndefined();
+      expect(command).toHaveBeenCalledWith(
+        "authenticated-user",
+        null,
+        "submit",
+        offerId,
+        1,
+        expect.objectContaining({ documents: { cv: documentId } }),
+      );
+    },
+  );
+  test.each([
+    { ...baseDocument, scan_status: "infected" },
+    { ...baseDocument, scan_status: "failed" },
+    { ...baseDocument, candidate_id: "other-candidate" },
+    { ...baseDocument, category: "identity" },
+    { ...baseDocument, deleted_at: "2026-11-23T10:00:00Z" },
+    null,
+  ])(
+    "unusable or unauthorized attachment does not reach the command",
+    async (document) => {
+      mockDocument(document);
+      expect(
+        (await candidateAction("submit", offerId, 1, input)).error,
+      ).toMatch(/Dokumen/);
+      expect(command).not.toHaveBeenCalled();
+    },
+  );
+  test("incomplete upload errors returned by the database remain visible", async () => {
+    mockDocument(baseDocument);
+    (command as jest.Mock).mockRejectedValueOnce(
+      new Error("Unggahan dokumen belum selesai. Unggah ulang file Anda."),
+    );
+    expect((await candidateAction("submit", offerId, 1, input)).error).toMatch(
+      /Unggahan dokumen belum selesai/,
+    );
   });
 });

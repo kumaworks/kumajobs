@@ -561,7 +561,7 @@ export function ApplyForm({
               <p>
                 {incompleteDocuments.length > 0
                   ? "Ada dokumen yang belum lengkap atau tidak dapat digunakan. Periksa kembali dokumen Anda."
-                  : `Menunggu pemeriksaan: ${pendingSelectedDocuments.map((requirement) => requirement.label).join(", ")}. Tombol kirim akan aktif otomatis setelah pemeriksaan selesai.`}
+                  : `Menunggu pemeriksaan: ${pendingSelectedDocuments.map((requirement) => requirement.label).join(", ")}. Anda tetap dapat mengirim lamaran. File belum dapat dibuka sampai pemeriksaan selesai.`}
               </p>
               <button
                 type="button"
@@ -574,11 +574,7 @@ export function ApplyForm({
           )}
           <ActionForm
             label="Kirim lamaran"
-            disabled={
-              uploadingDocument ||
-              incompleteDocuments.length > 0 ||
-              pendingSelectedDocuments.length > 0
-            }
+            disabled={uploadingDocument || incompleteDocuments.length > 0}
             submit={async () => {
               const r = await candidateAction(
                 "submit",

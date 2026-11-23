@@ -91,7 +91,7 @@ export function ApplicationDocument({
             {ready
               ? "Siap digunakan · Sudah terpasang pada lamaran ini."
               : pending
-                ? "File terpilih. Anda dapat lanjut mengisi lamaran. Pemeriksaan berlangsung sebelum lamaran dikirim."
+                ? "File terpilih. Lamaran dapat dikirim sekarang; file baru dapat dibuka setelah pemeriksaan keamanan selesai."
                 : "File ini tidak dapat digunakan. Unggah file lain atau pilih file tersimpan."}
           </p>
           <button

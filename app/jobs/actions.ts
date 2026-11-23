@@ -192,7 +192,7 @@ export async function candidateAction(
             !doc ||
             doc.candidate_id !== session.candidate?.id ||
             doc.category !== "application" ||
-            doc.scan_status !== "clean" ||
+            !["clean", "pending"].includes(doc.scan_status) ||
             doc.deleted_at ||
             !rule.formats.includes(doc.extension)
           )
